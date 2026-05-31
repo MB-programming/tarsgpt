@@ -7,62 +7,88 @@ echo "=== TARS Setup for Mac ==="
 echo "    100% offline — no API keys needed"
 echo ""
 
-# Check Python
+# ── Python ────────────────────────────────────────────────
 if ! command -v python3 &>/dev/null; then
-    echo "ERROR: Python 3 not found. Install from https://python.org"
+    echo "ERROR: Python 3 not found."
+    echo "Install from: https://www.python.org/downloads/"
     exit 1
 fi
 
-# Check Homebrew
-if ! command -v brew &>/dev/null; then
-    echo "Installing Homebrew..."
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+# ── Homebrew (optional but helpful) ──────────────────────
+HAS_BREW=false
+if command -v brew &>/dev/null; then
+    HAS_BREW=true
 fi
 
-# Install ffmpeg (needed by whisper)
+# ── ffmpeg ────────────────────────────────────────────────
 if ! command -v ffmpeg &>/dev/null; then
     echo "Installing ffmpeg..."
-    brew install ffmpeg
+    if $HAS_BREW; then
+        brew install ffmpeg
+    else
+        echo "  brew غير متاح — ثبّت ffmpeg يدوياً من: https://ffmpeg.org/download.html"
+        echo "  أو ثبّت Homebrew أولاً: https://brew.sh"
+        echo "  ثم أعد تشغيل هذا الـ script."
+        exit 1
+    fi
 fi
 
-# Install portaudio (needed by sounddevice)
-if ! brew list portaudio &>/dev/null 2>&1; then
+# ── portaudio (للميكروفون) ────────────────────────────────
+if $HAS_BREW && ! brew list portaudio &>/dev/null 2>&1; then
     echo "Installing portaudio..."
     brew install portaudio
 fi
 
-# Install Ollama (local AI engine)
+# ── Ollama ────────────────────────────────────────────────
 if ! command -v ollama &>/dev/null; then
-    echo "Installing Ollama (local AI)..."
-    brew install ollama
+    echo ""
+    echo "Installing Ollama (local AI engine)..."
+    if $HAS_BREW; then
+        brew install ollama
+    else
+        # Direct installer from ollama.com
+        curl -fsSL https://ollama.com/install.sh | sh
+    fi
+
+    # Verify install succeeded
+    if ! command -v ollama &>/dev/null; then
+        echo ""
+        echo "  تعذّر تثبيت Ollama تلقائياً."
+        echo "  حمّله يدوياً من: https://ollama.com/download"
+        echo "  بعد التثبيت أعد تشغيل هذا الـ script."
+        exit 1
+    fi
+
+    echo "  ✓ Ollama installed."
 fi
 
-# Pull the TARS brain model (llama3.2 ~2GB)
+# ── Pull the AI model (one-time ~2GB download) ─────────────
 echo ""
 echo "Downloading AI model: llama3.2 (~2 GB, one-time download)..."
 ollama pull llama3.2
 
-# Create virtual environment
+# ── Python packages ────────────────────────────────────────
 echo ""
 echo "Creating Python virtual environment..."
 python3 -m venv venv
 source venv/bin/activate
 
-# Install Python packages
 echo "Installing Python packages..."
-pip install --upgrade pip
+pip install --upgrade pip --quiet
 pip install -r requirements.txt
 
 echo ""
-echo "=== Setup Complete! ==="
+echo "╔══════════════════════════════════════════╗"
+echo "║         Setup Complete!                 ║"
+echo "╚══════════════════════════════════════════╝"
 echo ""
-echo "To run TARS:"
+echo "لتشغيل TARS:"
 echo ""
-echo "  1. Start Ollama (in a separate terminal or background):"
-echo "     ollama serve"
+echo "  Terminal 1 — شغّل Ollama:"
+echo "    ollama serve"
 echo ""
-echo "  2. Run TARS:"
-echo "     source venv/bin/activate"
-echo "     python main.py"
+echo "  Terminal 2 — شغّل TARS:"
+echo "    source venv/bin/activate"
+echo "    python main.py"
 echo ""
-echo "Everything runs locally on your Mac — no internet needed after setup."
+echo "ملاحظة: TARS يبدأ Ollama تلقائياً إن لم يكن شغّالاً."
