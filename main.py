@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 """TARS Voice Assistant — Interstellar Edition"""
 
-import os
 import sys
-import time
-from dotenv import load_dotenv
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from rich import box
-
-load_dotenv()
 
 console = Console()
 
@@ -18,23 +13,10 @@ TARS_BANNER = """
 ╔══════════════════════════════════════════╗
 ║   T A R S   —   Voice Interface v1.0    ║
 ║   Humor: 75%  |  Honesty: 90%           ║
+║   100% Offline — No API keys needed     ║
 ║   Press  ENTER  to speak  |  q  to quit ║
 ╚══════════════════════════════════════════╝
 """
-
-
-def check_api_key():
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        console.print(
-            Panel(
-                "[red]ANTHROPIC_API_KEY not found.[/red]\n"
-                "Create a [bold].env[/bold] file in this folder with:\n"
-                "[cyan]ANTHROPIC_API_KEY=your_key_here[/cyan]",
-                title="Configuration Error",
-                border_style="red",
-            )
-        )
-        sys.exit(1)
 
 
 def print_tars(text: str):
@@ -63,14 +45,20 @@ def print_status(msg: str):
 
 
 def main():
-    check_api_key()
-
-    # Lazy imports after key check
     from listener import record_until_silence, transcribe
     from speech import speak
-    from brain import chat, reset
+    from brain import chat, reset, check_ollama
 
     console.print(f"[cyan]{TARS_BANNER}[/cyan]")
+
+    # Check Ollama
+    print_status("Connecting to Ollama (local AI)...")
+    try:
+        check_ollama()
+        console.print("[green]  ✓  Ollama ready.[/green]")
+    except RuntimeError as e:
+        console.print(Panel(f"[red]{e}[/red]", title="Ollama Error", border_style="red"))
+        sys.exit(1)
 
     # Pre-load Whisper model
     print_status("Loading Whisper speech recognition model...")
