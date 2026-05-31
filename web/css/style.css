@@ -1,0 +1,197 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --bg:       #050810;
+    --panel:    #0a0f1e;
+    --border:   #1a2a4a;
+    --cyan:     #00d4ff;
+    --cyan-dim: #0066aa;
+    --text:     #c8e0f0;
+    --dim:      #4a6a8a;
+    --glow:     0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+/* ── Header ── */
+header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.tars-logo {
+    font-size: 3rem;
+    font-weight: 900;
+    letter-spacing: 0.4em;
+    color: var(--cyan);
+    text-shadow: var(--glow);
+}
+
+.tars-sub {
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    color: var(--dim);
+    margin-top: 6px;
+}
+
+.settings {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 14px;
+}
+
+.setting {
+    font-size: 0.65rem;
+    color: var(--dim);
+    border: 1px solid var(--border);
+    padding: 3px 10px;
+    letter-spacing: 0.1em;
+}
+
+/* ── Main panel ── */
+.panel {
+    width: 100%;
+    max-width: 680px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    padding: 30px;
+}
+
+/* ── Visualizer ── */
+.visualizer-wrap {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    height: 40px;
+    align-items: flex-end;
+    margin-bottom: 30px;
+}
+
+.bar {
+    width: 4px;
+    background: var(--cyan-dim);
+    border-radius: 2px;
+    height: 6px;
+    transition: height 0.1s;
+}
+
+#visualizer.active .bar {
+    animation: bounce 0.6s ease-in-out infinite alternate;
+}
+#visualizer.active .bar:nth-child(2) { animation-delay: 0.1s; }
+#visualizer.active .bar:nth-child(3) { animation-delay: 0.2s; }
+#visualizer.active .bar:nth-child(4) { animation-delay: 0.15s; }
+#visualizer.active .bar:nth-child(5) { animation-delay: 0.05s; }
+#visualizer.active .bar:nth-child(6) { animation-delay: 0.25s; }
+#visualizer.active .bar:nth-child(7) { animation-delay: 0.1s; }
+
+@keyframes bounce {
+    from { height: 4px;  background: var(--cyan-dim); }
+    to   { height: 32px; background: var(--cyan);     }
+}
+
+/* ── Talk button ── */
+.btn-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 24px;
+}
+
+#talkBtn {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    border: 2px solid var(--cyan-dim);
+    background: transparent;
+    color: var(--cyan);
+    font-family: 'Courier New', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+}
+
+#talkBtn:hover {
+    border-color: var(--cyan);
+    box-shadow: var(--glow);
+}
+
+#talkBtn.listening {
+    border-color: var(--cyan);
+    box-shadow: 0 0 30px rgba(0, 212, 255, 0.6);
+    animation: pulse 1s ease-in-out infinite;
+}
+
+#talkBtn.thinking {
+    border-color: #ffaa00;
+    color: #ffaa00;
+    box-shadow: 0 0 20px rgba(255, 170, 0, 0.3);
+}
+
+#talkBtn.speaking {
+    border-color: var(--cyan);
+    box-shadow: var(--glow);
+}
+
+@keyframes pulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(0,212,255,0.4); }
+    50%       { box-shadow: 0 0 40px rgba(0,212,255,0.8); }
+}
+
+/* ── Status ── */
+#status {
+    text-align: center;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    color: var(--dim);
+    margin-bottom: 28px;
+    text-transform: uppercase;
+}
+
+/* ── Conversation ── */
+.conversation {
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.msg-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: var(--dim);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+}
+
+.msg-text {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    opacity: 0;
+    transition: opacity 0.4s;
+    min-height: 1.4em;
+}
+
+#transcript { color: var(--text); }
+#response   { color: var(--cyan); text-shadow: 0 0 10px rgba(0,212,255,0.2); }
+
+/* ── Footer ── */
+footer {
+    margin-top: 20px;
+    font-size: 0.6rem;
+    color: var(--border);
+    letter-spacing: 0.1em;
+}

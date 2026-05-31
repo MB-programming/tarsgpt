@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TARS — Voice Interface</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header>
+    <div class="tars-logo">TARS</div>
+    <div class="tars-sub">CASE WESTERN RESERVE · TACTICAL ASSISTANCE ROBOT SYSTEM</div>
+    <div class="settings">
+        <span class="setting">HUMOR 75%</span>
+        <span class="setting">HONESTY 90%</span>
+        <span class="setting">ONLINE</span>
+    </div>
+</header>
+
+<main class="panel">
+
+    <div class="visualizer-wrap">
+        <div id="visualizer">
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+        </div>
+    </div>
+
+    <div class="btn-wrap">
+        <button id="talkBtn">SPEAK</button>
+    </div>
+
+    <div id="status">Ready</div>
+
+    <div class="conversation">
+        <div>
+            <div class="msg-label">You</div>
+            <div class="msg-text" id="transcript"></div>
+        </div>
+        <div>
+            <div class="msg-label">TARS</div>
+            <div class="msg-text" id="response"></div>
+        </div>
+    </div>
+
+</main>
+
+<footer>INTERSTELLAR SYSTEMS · ENDURANCE MISSION · 2067</footer>
+
+<script src="js/tars.js"></script>
+</body>
+</html>
