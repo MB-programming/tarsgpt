@@ -1,29 +1,26 @@
 import os
-import urllib.request
-import urllib.error
 import json
+import urllib.request
 from tars_prompt import TARS_SYSTEM_PROMPT
 
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL = "llama-3.1-8b-instant"
+OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+MODEL = "gpt-4o-mini"
 
 _history: list[dict] = []
 
 
-def check_groq():
-    api_key = os.getenv("GROQ_API_KEY", "").strip()
+def check_openai():
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError(
-            "GROQ_API_KEY مش موجود.\n\n"
-            "خطوتين بس:\n"
-            "  1. سجّل مجاناً على: https://console.groq.com\n"
-            "  2. افتح ملف .env وحط:\n"
-            "     GROQ_API_KEY=gsk_xxxxxxxxxxxx"
+            "OPENAI_API_KEY مش موجود.\n\n"
+            "افتح ملف .env وحط:\n"
+            "  OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxx"
         )
 
 
 def chat(user_message: str) -> str:
-    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
 
     _history.append({"role": "user", "content": user_message})
 
@@ -37,7 +34,7 @@ def chat(user_message: str) -> str:
     }).encode()
 
     req = urllib.request.Request(
-        GROQ_URL,
+        OPENAI_URL,
         data=payload,
         headers={
             "Content-Type": "application/json",

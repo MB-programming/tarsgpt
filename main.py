@@ -17,7 +17,7 @@ TARS_BANNER = """
 ╔══════════════════════════════════════════╗
 ║   T A R S   —   Voice Interface v1.0    ║
 ║   Humor: 75%  |  Honesty: 90%           ║
-║   Powered by Groq (free)                ║
+║   Powered by OpenAI GPT-4o-mini         ║
 ║   Press  ENTER  to speak  |  q  to quit ║
 ╚══════════════════════════════════════════╝
 """
@@ -51,16 +51,15 @@ def print_status(msg: str):
 def main():
     from listener import record_until_silence, transcribe
     from speech import speak
-    from brain import chat, reset, check_groq
+    from brain import chat, reset, check_openai
 
     console.print(f"[cyan]{TARS_BANNER}[/cyan]")
 
-    # Check Groq API key
     try:
-        check_groq()
-        console.print("[green]  ✓  Groq API ready.[/green]")
+        check_openai()
+        console.print("[green]  ✓  OpenAI API ready.[/green]")
     except RuntimeError as e:
-        console.print(Panel(f"[red]{e}[/red]", title="Setup Required", border_style="red"))
+        console.print(Panel(f"[red]{e}[/red]", title="OpenAI Error", border_style="red"))
         sys.exit(1)
 
     # Pre-load Whisper model
