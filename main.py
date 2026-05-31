@@ -2,10 +2,14 @@
 """TARS Voice Assistant — Interstellar Edition"""
 
 import sys
+import os
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from rich import box
+
+load_dotenv()
 
 console = Console()
 
@@ -13,7 +17,7 @@ TARS_BANNER = """
 ╔══════════════════════════════════════════╗
 ║   T A R S   —   Voice Interface v1.0    ║
 ║   Humor: 75%  |  Honesty: 90%           ║
-║   100% Offline — No API keys needed     ║
+║   Powered by Groq (free)                ║
 ║   Press  ENTER  to speak  |  q  to quit ║
 ╚══════════════════════════════════════════╝
 """
@@ -47,17 +51,16 @@ def print_status(msg: str):
 def main():
     from listener import record_until_silence, transcribe
     from speech import speak
-    from brain import chat, reset, check_ollama
+    from brain import chat, reset, check_groq
 
     console.print(f"[cyan]{TARS_BANNER}[/cyan]")
 
-    # Check Ollama
-    print_status("Connecting to Ollama (local AI)...")
+    # Check Groq API key
     try:
-        check_ollama()
-        console.print("[green]  ✓  Ollama ready.[/green]")
+        check_groq()
+        console.print("[green]  ✓  Groq API ready.[/green]")
     except RuntimeError as e:
-        console.print(Panel(f"[red]{e}[/red]", title="Ollama Error", border_style="red"))
+        console.print(Panel(f"[red]{e}[/red]", title="Setup Required", border_style="red"))
         sys.exit(1)
 
     # Pre-load Whisper model
@@ -86,11 +89,9 @@ def main():
                 console.print("[yellow]  ✓  Conversation reset.[/yellow]")
                 continue
 
-            # Record voice
             console.print("[yellow]  ◉  Listening...[/yellow]")
             audio = record_until_silence()
 
-            # Transcribe
             print_status("Transcribing...")
             text = transcribe(audio)
 
@@ -100,7 +101,6 @@ def main():
 
             print_user(text)
 
-            # Get TARS response
             print_status("Thinking...")
             response = chat(text)
 
