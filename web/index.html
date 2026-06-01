@@ -8,54 +8,119 @@
 </head>
 <body>
 
-<header>
-    <div class="tars-logo">TARS</div>
-    <div class="tars-sub">CASE WESTERN RESERVE · TACTICAL ASSISTANCE ROBOT SYSTEM</div>
-    <div class="settings">
-        <span class="setting">HUMOR 75%</span>
-        <span class="setting">HONESTY 90%</span>
-        <span class="setting">ONLINE</span>
-    </div>
-</header>
+<div class="page-wrap">
 
-<main class="panel">
-
-    <div class="visualizer-wrap">
-        <div id="visualizer">
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
+    <!-- ── TARS Robot ── -->
+    <div class="tars-robot-wrap">
+        <div class="tars-robot" id="tarsRobot">
+            <div class="tars-body">
+                <!-- 4 panels like the movie -->
+                <div class="tars-panel p1">
+                    <div class="panel-inner">
+                        <div class="panel-line"></div>
+                        <div class="panel-line"></div>
+                        <div class="corner-light tl"></div>
+                        <div class="corner-light tr"></div>
+                        <div class="corner-light bl"></div>
+                        <div class="corner-light br"></div>
+                    </div>
+                </div>
+                <div class="tars-panel p2">
+                    <div class="panel-inner">
+                        <div class="eye-strip">
+                            <div class="eye"></div>
+                            <div class="eye-glow"></div>
+                        </div>
+                        <div class="panel-line"></div>
+                        <div class="corner-light tl"></div>
+                        <div class="corner-light tr"></div>
+                        <div class="corner-light bl"></div>
+                        <div class="corner-light br"></div>
+                    </div>
+                </div>
+                <div class="tars-panel p3">
+                    <div class="panel-inner">
+                        <div class="panel-line"></div>
+                        <div class="panel-grid">
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                        </div>
+                        <div class="corner-light tl"></div>
+                        <div class="corner-light tr"></div>
+                        <div class="corner-light bl"></div>
+                        <div class="corner-light br"></div>
+                    </div>
+                </div>
+                <div class="tars-panel p4">
+                    <div class="panel-inner">
+                        <div class="panel-line"></div>
+                        <div class="panel-line"></div>
+                        <div class="corner-light tl"></div>
+                        <div class="corner-light tr"></div>
+                        <div class="corner-light bl"></div>
+                        <div class="corner-light br"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- shadow under robot -->
+            <div class="tars-shadow"></div>
         </div>
+
+        <!-- state label under robot -->
+        <div class="robot-state" id="robotState">STANDBY</div>
     </div>
 
-    <div class="btn-wrap">
-        <button id="talkBtn">SPEAK</button>
+    <!-- ── Right side: controls ── -->
+    <div class="controls-wrap">
+
+        <header>
+            <div class="tars-logo">TARS</div>
+            <div class="tars-sub">TACTICAL ASSISTANCE ROBOT SYSTEM</div>
+            <div class="settings">
+                <span class="setting">HUMOR 75%</span>
+                <span class="setting">HONESTY 90%</span>
+                <span class="setting">ONLINE</span>
+            </div>
+        </header>
+
+        <main class="panel">
+
+            <div class="visualizer-wrap">
+                <div id="visualizer">
+                    <div class="bar"></div><div class="bar"></div>
+                    <div class="bar"></div><div class="bar"></div>
+                    <div class="bar"></div><div class="bar"></div>
+                    <div class="bar"></div>
+                </div>
+            </div>
+
+            <div class="btn-wrap">
+                <button id="talkBtn">SPEAK</button>
+            </div>
+
+            <div id="status">Ready</div>
+
+            <div class="toggle-wrap">
+                <button id="toggleBtn">ALWAYS ON</button>
+            </div>
+
+            <div class="conversation">
+                <div>
+                    <div class="msg-label">You</div>
+                    <div class="msg-text" id="transcript"></div>
+                </div>
+                <div>
+                    <div class="msg-label">TARS</div>
+                    <div class="msg-text" id="response"></div>
+                </div>
+            </div>
+
+        </main>
+
+        <footer>INTERSTELLAR SYSTEMS · ENDURANCE MISSION · 2067</footer>
+
     </div>
-
-    <div id="status">Ready</div>
-
-    <div class="toggle-wrap">
-        <button id="toggleBtn">ALWAYS ON</button>
-    </div>
-
-    <div class="conversation">
-        <div>
-            <div class="msg-label">You</div>
-            <div class="msg-text" id="transcript"></div>
-        </div>
-        <div>
-            <div class="msg-label">TARS</div>
-            <div class="msg-text" id="response"></div>
-        </div>
-    </div>
-
-</main>
-
-<footer>INTERSTELLAR SYSTEMS · ENDURANCE MISSION · 2067</footer>
+</div>
 
 <script src="js/tars.js"></script>
 </body>

@@ -11,6 +11,21 @@ const statusEl   = document.getElementById('status');
 const transcript = document.getElementById('transcript');
 const response   = document.getElementById('response');
 const visualizer = document.getElementById('visualizer');
+const robot      = document.getElementById('tarsRobot');
+const robotState = document.getElementById('robotState');
+
+const ROBOT_STATES = {
+    ready    : 'STANDBY',
+    listening: 'LISTENING',
+    alwayson : 'LISTENING',
+    thinking : 'PROCESSING',
+    speaking : 'TRANSMITTING',
+};
+
+function setRobotState(state) {
+    robot.className    = state === 'ready' ? '' : state;
+    robotState.textContent = ROBOT_STATES[state] || 'STANDBY';
+}
 
 // ── Speech Recognition ────────────────────────────────────
 function setupRecognition() {
@@ -91,6 +106,7 @@ function setStatus(state) {
     statusEl.textContent = s.text;
     btn.className        = s.cls;
     visualizer.className = (s.cls === 'listening' || s.cls === 'speaking') ? 'active' : '';
+    setRobotState(state);
 }
 
 function showUserText(text) { transcript.textContent = text; transcript.style.opacity = '1'; }
