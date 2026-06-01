@@ -150,6 +150,38 @@ header {
     50%       { box-shadow: 0 0 40px rgba(0,212,255,0.8); }
 }
 
+/* ── Always On toggle ── */
+.toggle-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+#toggleBtn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-family: 'Courier New', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    padding: 6px 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+}
+
+#toggleBtn:hover {
+    border-color: var(--cyan-dim);
+    color: var(--text);
+}
+
+#toggleBtn.active {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.25);
+    animation: pulse 2s ease-in-out infinite;
+}
+
 /* ── Status ── */
 #status {
     text-align: center;

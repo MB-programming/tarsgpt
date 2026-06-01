@@ -1,96 +1,122 @@
 const history = [];
-let recognition = null;
-let isListening = false;
-let isSpeaking = false;
+let recognition  = null;
+let isListening  = false;
+let isSpeaking   = false;
+let alwaysOn     = false;
 
-const btn       = document.getElementById('talkBtn');
-const status    = document.getElementById('status');
-const transcript= document.getElementById('transcript');
-const response  = document.getElementById('response');
-const visualizer= document.getElementById('visualizer');
+const btn        = document.getElementById('talkBtn');
+const toggleBtn  = document.getElementById('toggleBtn');
+const statusEl   = document.getElementById('status');
+const transcript = document.getElementById('transcript');
+const response   = document.getElementById('response');
+const visualizer = document.getElementById('visualizer');
 
-// ── Speech Recognition setup ──────────────────────────────
+// ── Speech Recognition ────────────────────────────────────
 function setupRecognition() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-        status.textContent = 'Browser not supported. Use Chrome or Safari.';
+        statusEl.textContent = 'Use Chrome or Safari for voice support.';
         btn.disabled = true;
+        toggleBtn.disabled = true;
         return;
     }
+
     recognition = new SR();
-    recognition.continuous    = false;
-    recognition.interimResults= false;
-    recognition.lang          = 'en-US';
+    recognition.continuous     = false;
+    recognition.interimResults = false;
+    recognition.lang           = 'en-US';
 
     recognition.onresult = async (e) => {
-        const text = e.results[0][0].transcript;
+        const text = e.results[0][0].transcript.trim();
+        if (!text) { restartIfAlwaysOn(); return; }
         showUserText(text);
         await sendToTARS(text);
     };
 
     recognition.onerror = (e) => {
-        setStatus('ready');
         isListening = false;
+        if (e.error === 'no-speech') {
+            restartIfAlwaysOn();
+        } else {
+            setStatus(alwaysOn ? 'alwayson' : 'ready');
+        }
     };
 
     recognition.onend = () => {
-        if (isListening) {
-            isListening = false;
-            if (!isSpeaking) setStatus('ready');
-        }
+        isListening = false;
+        if (!isSpeaking) restartIfAlwaysOn();
     };
 }
 
-// ── UI helpers ────────────────────────────────────────────
+function restartIfAlwaysOn() {
+    if (alwaysOn && !isSpeaking) {
+        setTimeout(startListening, 300);
+    } else if (!alwaysOn) {
+        setStatus('ready');
+    }
+}
+
+function startListening() {
+    if (isListening || isSpeaking) return;
+    try {
+        isListening = true;
+        recognition.start();
+        setStatus(alwaysOn ? 'alwayson' : 'listening');
+    } catch {
+        isListening = false;
+    }
+}
+
+function stopListening() {
+    try { recognition.stop(); } catch {}
+    isListening = false;
+}
+
+// ── UI ────────────────────────────────────────────────────
 function setStatus(state) {
-    const states = {
-        ready     : { text: 'Press to speak',      cls: 'ready'     },
-        listening : { text: 'Listening...',         cls: 'listening' },
-        thinking  : { text: 'Processing...',        cls: 'thinking'  },
-        speaking  : { text: 'TARS is responding...', cls: 'speaking' },
+    const map = {
+        ready    : { text: 'Press to speak',         cls: 'ready'    },
+        listening: { text: 'Listening...',            cls: 'listening'},
+        alwayson : { text: 'Always listening...',     cls: 'listening'},
+        thinking : { text: 'Processing...',           cls: 'thinking' },
+        speaking : { text: 'TARS is responding...',   cls: 'speaking' },
     };
-    const s = states[state] || states.ready;
-    status.textContent = s.text;
-    btn.className      = s.cls;
-    visualizer.className = s.cls === 'listening' || s.cls === 'speaking' ? 'active' : '';
+    const s = map[state] || map.ready;
+    statusEl.textContent  = s.text;
+    btn.className         = s.cls;
+    visualizer.className  = (s.cls === 'listening' || s.cls === 'speaking') ? 'active' : '';
 }
 
-function showUserText(text) {
-    transcript.textContent = text;
-    transcript.style.opacity = '1';
-}
+function showUserText(text)  { transcript.textContent = text; transcript.style.opacity = '1'; }
+function showTARSText(text)  { response.textContent   = text; response.style.opacity   = '1'; }
 
-function showTARSText(text) {
-    response.textContent = text;
-    response.style.opacity = '1';
-}
-
-// ── Talk to TARS ──────────────────────────────────────────
+// ── TARS Brain ────────────────────────────────────────────
 async function sendToTARS(userText) {
     setStatus('thinking');
     history.push({ role: 'user', content: userText });
 
     try {
-        const chatRes = await fetch('api/chat.php', {
+        const res  = await fetch('api/chat.php', {
             method : 'POST',
             headers: { 'Content-Type': 'application/json' },
             body   : JSON.stringify({ messages: history }),
         });
-        const chatData = await chatRes.json();
-        const reply    = chatData.choices[0].message.content;
+        const data  = await res.json();
+        const reply = data.choices[0].message.content;
 
         history.push({ role: 'assistant', content: reply });
         if (history.length > 20) history.splice(0, 2);
 
         showTARSText(reply);
         await speakTARS(reply);
-    } catch (err) {
-        setStatus('ready');
-        response.textContent = 'Error connecting to TARS.';
+    } catch {
+        response.textContent = 'Connection error.';
+        isSpeaking = false;
+        restartIfAlwaysOn();
     }
 }
 
-// ── TTS via OpenAI onyx voice ─────────────────────────────
+// ── TTS ───────────────────────────────────────────────────
 async function speakTARS(text) {
     setStatus('speaking');
     isSpeaking = true;
@@ -105,25 +131,39 @@ async function speakTARS(text) {
         const url   = URL.createObjectURL(blob);
         const audio = new Audio(url);
 
-        audio.onended = () => {
-            isSpeaking = false;
-            setStatus('ready');
-            URL.revokeObjectURL(url);
-        };
+        await new Promise((resolve) => {
+            audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+            audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+            audio.play();
+        });
+    } catch {}
 
-        await audio.play();
-    } catch {
-        isSpeaking = false;
-        setStatus('ready');
-    }
+    isSpeaking = false;
+    restartIfAlwaysOn();
+    if (!alwaysOn) setStatus('ready');
 }
 
-// ── Button ────────────────────────────────────────────────
+// ── Buttons ───────────────────────────────────────────────
 btn.addEventListener('click', () => {
-    if (isSpeaking || isListening) return;
-    isListening = true;
-    setStatus('listening');
-    recognition.start();
+    if (alwaysOn) return;
+    if (isListening) { stopListening(); return; }
+    if (isSpeaking)  return;
+    startListening();
+});
+
+toggleBtn.addEventListener('click', () => {
+    alwaysOn = !alwaysOn;
+
+    if (alwaysOn) {
+        toggleBtn.textContent  = 'TURN OFF';
+        toggleBtn.classList.add('active');
+        startListening();
+    } else {
+        toggleBtn.textContent  = 'ALWAYS ON';
+        toggleBtn.classList.remove('active');
+        stopListening();
+        setStatus('ready');
+    }
 });
 
 // ── Init ──────────────────────────────────────────────────
