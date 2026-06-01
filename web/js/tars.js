@@ -3,6 +3,7 @@ let recognition  = null;
 let isListening  = false;
 let isSpeaking   = false;
 let alwaysOn     = false;
+let currentLang  = 'en';
 
 const btn        = document.getElementById('talkBtn');
 const toggleBtn  = document.getElementById('toggleBtn');
@@ -24,7 +25,6 @@ function setupRecognition() {
     recognition = new SR();
     recognition.continuous     = false;
     recognition.interimResults = false;
-    recognition.lang           = 'en-US';
 
     recognition.onresult = async (e) => {
         const text = e.results[0][0].transcript.trim();
@@ -48,6 +48,11 @@ function setupRecognition() {
     };
 }
 
+function updateRecognitionLang() {
+    if (!recognition) return;
+    recognition.lang = currentLang === 'ar' ? 'ar-EG' : 'en-US';
+}
+
 function restartIfAlwaysOn() {
     if (alwaysOn && !isSpeaking) {
         setTimeout(startListening, 300);
@@ -58,6 +63,7 @@ function restartIfAlwaysOn() {
 
 function startListening() {
     if (isListening || isSpeaking) return;
+    updateRecognitionLang();
     try {
         isListening = true;
         recognition.start();
@@ -75,34 +81,72 @@ function stopListening() {
 // ── UI ────────────────────────────────────────────────────
 function setStatus(state) {
     const map = {
-        ready    : { text: 'Press to speak',         cls: 'ready'    },
-        listening: { text: 'Listening...',            cls: 'listening'},
-        alwayson : { text: 'Always listening...',     cls: 'listening'},
-        thinking : { text: 'Processing...',           cls: 'thinking' },
-        speaking : { text: 'TARS is responding...',   cls: 'speaking' },
+        ready    : { text: 'Press to speak',        cls: 'ready'     },
+        listening: { text: 'Listening...',           cls: 'listening' },
+        alwayson : { text: 'Always listening...',    cls: 'listening' },
+        thinking : { text: 'Processing...',          cls: 'thinking'  },
+        speaking : { text: 'TARS is responding...', cls: 'speaking'  },
     };
     const s = map[state] || map.ready;
-    statusEl.textContent  = s.text;
-    btn.className         = s.cls;
-    visualizer.className  = (s.cls === 'listening' || s.cls === 'speaking') ? 'active' : '';
+    statusEl.textContent = s.text;
+    btn.className        = s.cls;
+    visualizer.className = (s.cls === 'listening' || s.cls === 'speaking') ? 'active' : '';
 }
 
-function showUserText(text)  { transcript.textContent = text; transcript.style.opacity = '1'; }
-function showTARSText(text)  { response.textContent   = text; response.style.opacity   = '1'; }
+function showUserText(text) { transcript.textContent = text; transcript.style.opacity = '1'; }
+function showTARSText(text) { response.textContent   = text; response.style.opacity   = '1'; }
+
+// ── Smart Home Commands ───────────────────────────────────
+const COLORS = {
+    red    : '#ff2200', blue  : '#0077ff', green : '#00ff88',
+    purple : '#aa00ff', orange: '#ff8800', white : '#ffffff',
+    pink   : '#ff44aa', yellow: '#ffdd00',
+};
+
+function executeCommand(cmd) {
+    if (!cmd) return;
+
+    if (cmd.cmd === 'light') {
+        const on = cmd.value === 'on';
+        document.body.style.setProperty('--bg',    on ? '#0d1a2e' : '#050810');
+        document.body.style.setProperty('--panel', on ? '#112240' : '#0a0f1e');
+        document.querySelector('.panel').style.boxShadow =
+            on ? '0 0 60px rgba(0,212,255,0.15)' : 'none';
+    }
+
+    if (cmd.cmd === 'color') {
+        const name  = (cmd.value || 'random').toLowerCase();
+        const color = COLORS[name] || COLORS[Object.keys(COLORS)[Math.floor(Math.random() * Object.keys(COLORS).length)]];
+        document.body.style.setProperty('--cyan', color);
+        document.body.style.setProperty('--glow', `0 0 20px ${color}55`);
+    }
+}
+
+// ── Language detection ────────────────────────────────────
+function detectLangSwitch(text) {
+    const t = text.toLowerCase();
+    if (/arabic|عربي|عربى|بالعربي/.test(t))  { currentLang = 'ar'; return true; }
+    if (/english|إنجليزي|انجليزي/.test(t))   { currentLang = 'en'; return true; }
+    return false;
+}
 
 // ── TARS Brain ────────────────────────────────────────────
 async function sendToTARS(userText) {
     setStatus('thinking');
+    detectLangSwitch(userText);
     history.push({ role: 'user', content: userText });
 
     try {
         const res  = await fetch('api/chat.php', {
             method : 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body   : JSON.stringify({ messages: history }),
+            body   : JSON.stringify({ messages: history, lang: currentLang }),
         });
         const data  = await res.json();
         const reply = data.choices[0].message.content;
+
+        // Execute any smart command
+        if (data.command) executeCommand(data.command);
 
         history.push({ role: 'assistant', content: reply });
         if (history.length > 20) history.splice(0, 2);
@@ -145,7 +189,7 @@ async function speakTARS(text) {
 
 // ── Buttons ───────────────────────────────────────────────
 btn.addEventListener('click', () => {
-    if (alwaysOn) return;
+    if (alwaysOn)    return;
     if (isListening) { stopListening(); return; }
     if (isSpeaking)  return;
     startListening();
@@ -153,13 +197,12 @@ btn.addEventListener('click', () => {
 
 toggleBtn.addEventListener('click', () => {
     alwaysOn = !alwaysOn;
-
     if (alwaysOn) {
-        toggleBtn.textContent  = 'TURN OFF';
+        toggleBtn.textContent = 'TURN OFF';
         toggleBtn.classList.add('active');
         startListening();
     } else {
-        toggleBtn.textContent  = 'ALWAYS ON';
+        toggleBtn.textContent = 'ALWAYS ON';
         toggleBtn.classList.remove('active');
         stopListening();
         setStatus('ready');
