@@ -99,7 +99,7 @@ function curlPost(string $url, string $payload, array $headers): array {
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => $payload,
         CURLOPT_HTTPHEADER     => $headers,
-        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_TIMEOUT        => 60,
     ]);
     $body   = curl_exec($ch);
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);

@@ -163,10 +163,10 @@ window.stopVision = function (updateUI = true) {
 function captureFrame() {
     if (!visionStream || !visionVideo.videoWidth) return null;
     const ctx = captureCanvas.getContext('2d');
-    captureCanvas.width  = 320;
-    captureCanvas.height = 240;
-    ctx.drawImage(visionVideo, 0, 0, 320, 240);
-    return captureCanvas.toDataURL('image/jpeg', 0.8);
+    captureCanvas.width  = 160;
+    captureCanvas.height = 120;
+    ctx.drawImage(visionVideo, 0, 0, 160, 120);
+    return captureCanvas.toDataURL('image/jpeg', 0.5);
 }
 
 // ══════════════════════════════════════

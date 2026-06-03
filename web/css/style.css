@@ -20,13 +20,13 @@ body {
     background: var(--bg);
     color: var(--text);
     font-family: 'Courier New', monospace;
-    min-height: 100vh;
+    height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding: 20px 20px 110px;
-    overflow-x: hidden;
+    padding: 10px 20px 0;
+    overflow: hidden;
     position: relative;
 }
 
@@ -139,7 +139,7 @@ body::after {
 ══════════════════════════════════════ */
 .site-header {
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: 10px;
     width: 100%;
 }
 
@@ -198,8 +198,8 @@ body::after {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 24px;
+    gap: 8px;
+    margin-bottom: 12px;
 }
 
 .tars-robot { position: relative; }
@@ -220,7 +220,7 @@ body::after {
 
 .tars-panel {
     width: 100%;
-    height: 80px;
+    height: 55px;
     background: linear-gradient(135deg, #1c1c24 0%, #111118 50%, #0d0d14 100%);
     border: 1px solid #252530;
     position: relative;
@@ -373,9 +373,9 @@ body::after {
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(0,212,255,0.08);
-    border-radius: 20px;
-    padding: 18px 22px;
-    margin-bottom: 10px;
+    border-radius: 16px;
+    padding: 10px 16px;
+    margin-bottom: 8px;
 }
 
 .response-card { border-color: rgba(0,212,255,0.12); }
@@ -408,7 +408,7 @@ body::after {
     font-size: 0.6rem;
     letter-spacing: 0.15em;
     color: var(--dim);
-    margin-bottom: 14px;
+    margin-bottom: 8px;
     text-transform: uppercase;
 }
 
@@ -751,9 +751,9 @@ input[type=range]::-webkit-slider-thumb {
    FOOTER
 ══════════════════════════════════════ */
 footer {
-    margin-top: 10px;
-    margin-bottom: 20px;
-    font-size: 0.52rem;
+    margin-top: 6px;
+    margin-bottom: 0;
+    font-size: 0.48rem;
     color: var(--border);
     letter-spacing: 0.1em;
     text-align: center;
@@ -763,12 +763,12 @@ footer {
    MOBILE RESPONSIVE
 ══════════════════════════════════════ */
 @media (max-width: 650px) {
-    body { padding: 16px 16px 110px; }
+    body { padding: 8px 16px 0; }
 
     .page-wrap { max-width: 100%; }
 
     .tars-body { width: 80px; }
-    .tars-panel { height: 50px; }
+    .tars-panel { height: 42px; }
 
     .tars-logo { font-size: 1.7rem; }
 

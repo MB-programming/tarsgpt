@@ -1,9 +1,0 @@
-openai-whisper>=20231117
-edge-tts>=6.1.9
-sounddevice>=0.4.6
-soundfile>=0.12.1
-numpy>=1.24.0
-scipy>=1.11.0
-pydub>=0.25.1
-rich>=13.7.0
-python-dotenv>=1.0.0
