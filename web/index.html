@@ -2,40 +2,75 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>TARS — Voice Interface</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
+<!-- ── Settings overlay ───────────────────────────── -->
+<div id="settingsOverlay" class="hidden" onclick="closeSettings()"></div>
+<div id="settingsPanel">
+    <div class="settings-header">
+        <span>⚙ CONFIGURATION</span>
+        <button onclick="closeSettings()" class="close-btn">✕</button>
+    </div>
+
+    <!-- Provider -->
+    <div class="settings-section">
+        <div class="settings-label">AI PROVIDER</div>
+        <div class="provider-tabs">
+            <button class="ptab active" data-p="openai">OpenAI</button>
+            <button class="ptab"        data-p="gemini">Gemini</button>
+            <button class="ptab"        data-p="grok">Grok</button>
+        </div>
+    </div>
+
+    <!-- Personality sliders -->
+    <div class="settings-section">
+        <div class="settings-label">PERSONALITY</div>
+
+        <div class="slider-row">
+            <span>Humor</span>
+            <input type="range" id="sliderHumor"    min="0" max="100" value="75">
+            <span id="valHumor">75%</span>
+        </div>
+        <div class="slider-row">
+            <span>Humanity</span>
+            <input type="range" id="sliderHumanity" min="0" max="100" value="50">
+            <span id="valHumanity">50%</span>
+        </div>
+        <div class="slider-row">
+            <span>Sarcasm</span>
+            <input type="range" id="sliderSarcasm"  min="0" max="100" value="40">
+            <span id="valSarcasm">40%</span>
+        </div>
+    </div>
+
+    <button class="save-btn" onclick="saveSettings()">APPLY</button>
+</div>
+
+<!-- ── Main ───────────────────────────────────────── -->
 <div class="page-wrap">
 
-    <!-- ── TARS Robot ── -->
+    <!-- TARS robot -->
     <div class="tars-robot-wrap">
         <div class="tars-robot" id="tarsRobot">
             <div class="tars-body">
-                <!-- 4 panels like the movie -->
                 <div class="tars-panel p1">
                     <div class="panel-inner">
                         <div class="panel-line"></div>
                         <div class="panel-line"></div>
-                        <div class="corner-light tl"></div>
-                        <div class="corner-light tr"></div>
-                        <div class="corner-light bl"></div>
-                        <div class="corner-light br"></div>
+                        <div class="corner-light tl"></div><div class="corner-light tr"></div>
+                        <div class="corner-light bl"></div><div class="corner-light br"></div>
                     </div>
                 </div>
                 <div class="tars-panel p2">
                     <div class="panel-inner">
-                        <div class="eye-strip">
-                            <div class="eye"></div>
-                            <div class="eye-glow"></div>
-                        </div>
+                        <div class="eye-strip"><div class="eye"></div><div class="eye-glow"></div></div>
                         <div class="panel-line"></div>
-                        <div class="corner-light tl"></div>
-                        <div class="corner-light tr"></div>
-                        <div class="corner-light bl"></div>
-                        <div class="corner-light br"></div>
+                        <div class="corner-light tl"></div><div class="corner-light tr"></div>
+                        <div class="corner-light bl"></div><div class="corner-light br"></div>
                     </div>
                 </div>
                 <div class="tars-panel p3">
@@ -45,41 +80,37 @@
                             <span></span><span></span><span></span>
                             <span></span><span></span><span></span>
                         </div>
-                        <div class="corner-light tl"></div>
-                        <div class="corner-light tr"></div>
-                        <div class="corner-light bl"></div>
-                        <div class="corner-light br"></div>
+                        <div class="corner-light tl"></div><div class="corner-light tr"></div>
+                        <div class="corner-light bl"></div><div class="corner-light br"></div>
                     </div>
                 </div>
                 <div class="tars-panel p4">
                     <div class="panel-inner">
                         <div class="panel-line"></div>
                         <div class="panel-line"></div>
-                        <div class="corner-light tl"></div>
-                        <div class="corner-light tr"></div>
-                        <div class="corner-light bl"></div>
-                        <div class="corner-light br"></div>
+                        <div class="corner-light tl"></div><div class="corner-light tr"></div>
+                        <div class="corner-light bl"></div><div class="corner-light br"></div>
                     </div>
                 </div>
             </div>
-            <!-- shadow under robot -->
             <div class="tars-shadow"></div>
         </div>
-
-        <!-- state label under robot -->
         <div class="robot-state" id="robotState">STANDBY</div>
     </div>
 
-    <!-- ── Right side: controls ── -->
+    <!-- Controls -->
     <div class="controls-wrap">
 
         <header>
-            <div class="tars-logo">TARS</div>
+            <div class="header-top">
+                <div class="tars-logo">TARS</div>
+                <button class="gear-btn" onclick="openSettings()">⚙</button>
+            </div>
             <div class="tars-sub">TACTICAL ASSISTANCE ROBOT SYSTEM</div>
-            <div class="settings">
-                <span class="setting">HUMOR 75%</span>
-                <span class="setting">HONESTY 90%</span>
-                <span class="setting">ONLINE</span>
+            <div class="settings-chips">
+                <span class="chip" id="chipProvider">OpenAI</span>
+                <span class="chip" id="chipHumor">Humor 75%</span>
+                <span class="chip" id="chipHumanity">Humanity 50%</span>
             </div>
         </header>
 
@@ -95,14 +126,12 @@
             </div>
 
             <div class="btn-wrap">
-                <button id="talkBtn">SPEAK</button>
+                <button id="talkBtn" ontouchstart="handleTouch(event)" onclick="handleClick()">
+                    <span class="btn-label">SPEAK</span>
+                </button>
             </div>
 
             <div id="status">Ready</div>
-
-            <div class="toggle-wrap">
-                <button id="toggleBtn">ALWAYS ON</button>
-            </div>
 
             <div class="conversation">
                 <div>
@@ -118,7 +147,6 @@
         </main>
 
         <footer>INTERSTELLAR SYSTEMS · ENDURANCE MISSION · 2067</footer>
-
     </div>
 </div>
 

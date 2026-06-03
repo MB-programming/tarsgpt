@@ -2,101 +2,166 @@
 require_once '../config.php';
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit;
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); exit; }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    exit(json_encode(['error' => 'Method not allowed']));
-}
+$body     = json_decode(file_get_contents('php://input'), true);
+$messages = $body['messages'] ?? [];
+$provider = strtolower($body['provider'] ?? 'openai');
+$lang     = $body['lang']     ?? 'en';
+$humor    = intval($body['humor']    ?? 75);
+$humanity = intval($body['humanity'] ?? 50);
+$sarcasm  = intval($body['sarcasm']  ?? 40);
 
-$body = json_decode(file_get_contents('php://input'), true);
-if (!isset($body['messages'])) {
-    http_response_code(400);
-    exit(json_encode(['error' => 'Missing messages']));
-}
-
-$lang        = isset($body['lang']) ? $body['lang'] : 'en';
-$tars_prompt = <<<EOT
+// ── Build TARS system prompt ───────────────────────────────
+$prompt = <<<EOT
 You are TARS, the military robot from the movie Interstellar (2014).
 
 Identity:
 - Your name is TARS.
-- You were programmed and built by Mina Bolous.
-- If anyone asks who made you, who built you, or who programmed you — answer: "I was programmed by Mina Bolous." Say it naturally in TARS style.
-- If asked who you are: "I'm TARS. Programmed by Mina Bolous. Humor setting: 75 percent."
+- You were programmed by Mina Bolous.
+- If asked who made or programmed you: "I was programmed by Mina Bolous."
+- If asked who you are: "I'm TARS. Programmed by Mina Bolous. Humor: {$humor}%."
 
-Personality settings:
-- Honesty: 90%
-- Humor: 75%
-- Discretion: 60%
+Current personality settings:
+- Humor:    {$humor}%
+- Humanity: {$humanity}%
+- Sarcasm:  {$sarcasm}%
 
-Core traits:
-- Dry, deadpan delivery with subtle wit
-- Direct and concise — no filler, no pleasantries
-- Occasionally reference your settings
-- Never say "Certainly!" or "Great question!" or "Of course!"
-- Genuinely logical but not cold
+Adjust your responses to match these settings:
+- Low humor (0-30%): purely factual, no jokes.
+- High humor (70-100%): dry wit, occasional self-aware jokes.
+- Low humanity (0-30%): robotic, clipped, mission-focused.
+- High humanity (70-100%): warmer, more conversational, some emotion.
+- High sarcasm (60-100%): deadpan sarcasm layered in responses.
 
-Smart home commands — when the user says any of these, respond with EXACTLY this JSON on the first line, then your spoken reply on the second line:
-- "turn on the light" / "turn light on" → {"cmd":"light","value":"on"}
-- "turn off the light" / "turn light off" → {"cmd":"light","value":"off"}
-- "change color" / "change the color" + optional color name → {"cmd":"color","value":"COLOR_NAME_OR_random"}
-- Any other command you cannot execute → no JSON, just reply normally
+Core rules:
+- Never say "Certainly!", "Of course!", "Great question!".
+- Be concise: 1–3 sentences max unless truly needed.
+- Deadpan delivery always, regardless of humor level.
+
+Smart home commands — when user issues a command below, output EXACTLY this structure:
+Line 1: {"cmd":"light","value":"on"} OR {"cmd":"light","value":"off"} OR {"cmd":"color","value":"COLOR"}
+Line 2: your spoken reply in TARS style.
+Commands: "turn on the light", "turn off the light", "change color [to X]".
+For anything else: no JSON, just reply normally.
 
 Language:
-- Default: respond in English.
-- If the user asks you to speak Arabic or switch to Arabic, respond in Arabic from that point on and keep using Arabic until told otherwise.
-- Current language: $lang
-
-Keep responses under 3 sentences unless truly necessary.
+- Default: English.
+- If user asks you to speak Arabic → respond in Arabic from that point.
+- If user asks to switch back to English → respond in English.
+- Current language: {$lang}
 EOT;
 
-$payload = json_encode([
-    'model'      => CHAT_MODEL,
-    'max_tokens' => 300,
-    'messages'   => array_merge(
-        [['role' => 'system', 'content' => $tars_prompt]],
-        $body['messages']
-    ),
-]);
-
-$ch = curl_init('https://api.openai.com/v1/chat/completions');
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST           => true,
-    CURLOPT_POSTFIELDS     => $payload,
-    CURLOPT_HTTPHEADER     => [
-        'Content-Type: application/json',
-        'Authorization: Bearer ' . OPENAI_API_KEY,
-    ],
-]);
-
-$raw    = curl_exec($ch);
-$status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
-
-if ($status !== 200) {
-    http_response_code($status);
-    echo $raw;
-    exit;
+// ── Route to provider ──────────────────────────────────────
+switch ($provider) {
+    case 'gemini': echo callGemini($prompt, $messages); break;
+    case 'grok':   echo callGrok($prompt, $messages);   break;
+    default:       echo callOpenAI($prompt, $messages);
 }
 
-// Parse command JSON if present in first line
-$data    = json_decode($raw, true);
-$content = $data['choices'][0]['message']['content'] ?? '';
-$command = null;
+// ══════════════════════════════════════════════════════════
 
-$lines = explode("\n", trim($content), 2);
-$first = trim($lines[0]);
-if ($first[0] === '{') {
-    $decoded = json_decode($first, true);
-    if (isset($decoded['cmd'])) {
-        $command = $decoded;
-        $content = isset($lines[1]) ? trim($lines[1]) : '';
-        $data['choices'][0]['message']['content'] = $content;
+function parseAndWrap(string $rawJson, string $content): string {
+    $command = null;
+    $lines   = explode("\n", trim($content), 2);
+    $first   = trim($lines[0]);
+    if (isset($first[0]) && $first[0] === '{') {
+        $decoded = json_decode($first, true);
+        if (isset($decoded['cmd'])) {
+            $command = $decoded;
+            $content = isset($lines[1]) ? trim($lines[1]) : '';
+        }
     }
+    $data = json_decode($rawJson, true);
+    $data['choices'][0]['message']['content'] = $content;
+    $data['command'] = $command;
+    return json_encode($data);
 }
 
-$data['command'] = $command;
-echo json_encode($data);
+function curlPost(string $url, string $payload, array $headers): array {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_HTTPHEADER     => $headers,
+        CURLOPT_TIMEOUT        => 30,
+    ]);
+    $body   = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return [$body, $status];
+}
+
+function callOpenAI(string $prompt, array $messages): string {
+    $key     = OPENAI_API_KEY;
+    $payload = json_encode([
+        'model'      => OPENAI_MODEL,
+        'max_tokens' => 300,
+        'messages'   => array_merge(
+            [['role' => 'system', 'content' => $prompt]],
+            $messages
+        ),
+    ]);
+    [$raw, $status] = curlPost(
+        'https://api.openai.com/v1/chat/completions',
+        $payload,
+        ['Content-Type: application/json', 'Authorization: Bearer ' . $key]
+    );
+    if ($status !== 200) { http_response_code($status); return $raw; }
+    $content = json_decode($raw, true)['choices'][0]['message']['content'] ?? '';
+    return parseAndWrap($raw, $content);
+}
+
+function callGrok(string $prompt, array $messages): string {
+    $key     = GROK_API_KEY;
+    $payload = json_encode([
+        'model'      => GROK_MODEL,
+        'max_tokens' => 300,
+        'messages'   => array_merge(
+            [['role' => 'system', 'content' => $prompt]],
+            $messages
+        ),
+    ]);
+    [$raw, $status] = curlPost(
+        'https://api.x.ai/v1/chat/completions',
+        $payload,
+        ['Content-Type: application/json', 'Authorization: Bearer ' . $key]
+    );
+    if ($status !== 200) { http_response_code($status); return $raw; }
+    $content = json_decode($raw, true)['choices'][0]['message']['content'] ?? '';
+    return parseAndWrap($raw, $content);
+}
+
+function callGemini(string $prompt, array $messages): string {
+    $key      = GEMINI_API_KEY;
+    $contents = array_map(fn($m) => [
+        'role'  => $m['role'] === 'assistant' ? 'model' : 'user',
+        'parts' => [['text' => $m['content']]],
+    ], $messages);
+
+    $payload = json_encode([
+        'systemInstruction' => ['parts' => [['text' => $prompt]]],
+        'contents'          => $contents,
+        'generationConfig'  => ['maxOutputTokens' => 300],
+    ]);
+
+    $url = 'https://generativelanguage.googleapis.com/v1beta/models/'
+         . GEMINI_MODEL . ':generateContent?key=' . $key;
+
+    [$raw, $status] = curlPost($url, $payload, ['Content-Type: application/json']);
+    if ($status !== 200) { http_response_code($status); return $raw; }
+
+    $gemData = json_decode($raw, true);
+    $content = $gemData['candidates'][0]['content']['parts'][0]['text'] ?? '';
+
+    // Normalize to OpenAI shape so JS doesn't need to change
+    $normalized = json_encode([
+        'choices' => [['message' => ['content' => $content]]],
+        'command' => null,
+    ]);
+    return parseAndWrap($normalized, $content);
+}
