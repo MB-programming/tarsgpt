@@ -14,8 +14,17 @@ $lang     = $body['lang']     ?? 'en';
 $humor    = intval($body['humor']    ?? 75);
 $humanity = intval($body['humanity'] ?? 50);
 $sarcasm  = intval($body['sarcasm']  ?? 40);
-// base64-encoded JPEG from the vision overlay (null when no vision active)
-$image    = $body['image']    ?? null;   // data-URL prefix already stripped by JS
+$image    = $body['image']    ?? null;   // base64 data URL or null
+
+// Strip the data URL prefix to get raw base64 for Gemini
+$imageBase64 = null;
+if ($image) {
+    // data:image/jpeg;base64,<data>
+    $commaPos = strpos($image, ',');
+    if ($commaPos !== false) {
+        $imageBase64 = substr($image, $commaPos + 1);
+    }
+}
 
 // ── Build TARS system prompt ───────────────────────────────
 $prompt = <<<EOT
@@ -59,8 +68,8 @@ EOT;
 
 // ── Route to provider ──────────────────────────────────────
 switch ($provider) {
-    case 'gemini': echo callGemini($prompt, $messages, $image); break;
-    case 'grok':   echo callGrok($prompt, $messages, $image);   break;
+    case 'gemini': echo callGemini($prompt, $messages, $imageBase64); break;
+    case 'grok':   echo callGrok($prompt, $messages, $image);         break;
     default:       echo callOpenAI($prompt, $messages, $image);
 }
 
@@ -98,43 +107,39 @@ function curlPost(string $url, string $payload, array $headers): array {
     return [$body, $status];
 }
 
-function callOpenAI(string $prompt, array $messages, ?string $image): string {
-    $key = OPENAI_API_KEY;
+function callOpenAI(string $prompt, array $messages, ?string $imageDataUrl): string {
+    $key   = OPENAI_API_KEY;
+    // Use gpt-4o when vision image is present, otherwise use configured model
+    $model = $imageDataUrl ? 'gpt-4o' : OPENAI_MODEL;
 
-    // Build message list — attach vision image to the last user message if provided
-    $builtMessages = array_merge(
+    // Build message list — if image is present, transform last user message to vision format
+    $msgs = array_merge(
         [['role' => 'system', 'content' => $prompt]],
         $messages
     );
 
-    if ($image) {
-        // Replace the last user message content with a multimodal array
-        for ($i = count($builtMessages) - 1; $i >= 0; $i--) {
-            if ($builtMessages[$i]['role'] === 'user') {
-                $text = is_string($builtMessages[$i]['content'])
-                    ? $builtMessages[$i]['content']
+    if ($imageDataUrl) {
+        // Find and convert the last user message to multimodal content
+        for ($i = count($msgs) - 1; $i >= 0; $i--) {
+            if ($msgs[$i]['role'] === 'user') {
+                $textContent = is_string($msgs[$i]['content'])
+                    ? $msgs[$i]['content']
                     : '';
-                $builtMessages[$i]['content'] = [
-                    ['type' => 'text',      'text'      => $text],
-                    ['type' => 'image_url', 'image_url' => [
-                        'url'    => 'data:image/jpeg;base64,' . $image,
-                        'detail' => 'low',
-                    ]],
+                $msgs[$i]['content'] = [
+                    ['type' => 'text',      'text' => $textContent],
+                    ['type' => 'image_url', 'image_url' => ['url' => $imageDataUrl]],
                 ];
                 break;
             }
         }
-        // Vision requires a vision-capable model
-        $model = 'gpt-4o-mini';
-    } else {
-        $model = OPENAI_MODEL;
     }
 
     $payload = json_encode([
         'model'      => $model,
         'max_tokens' => 300,
-        'messages'   => $builtMessages,
+        'messages'   => $msgs,
     ]);
+
     [$raw, $status] = curlPost(
         'https://api.openai.com/v1/chat/completions',
         $payload,
@@ -145,27 +150,24 @@ function callOpenAI(string $prompt, array $messages, ?string $image): string {
     return parseAndWrap($raw, $content);
 }
 
-function callGrok(string $prompt, array $messages, ?string $image): string {
+function callGrok(string $prompt, array $messages, ?string $imageDataUrl): string {
     $key = GROK_API_KEY;
 
-    $builtMessages = array_merge(
+    $msgs = array_merge(
         [['role' => 'system', 'content' => $prompt]],
         $messages
     );
 
-    // Grok supports vision via the same OpenAI-compatible multimodal format
-    if ($image) {
-        for ($i = count($builtMessages) - 1; $i >= 0; $i--) {
-            if ($builtMessages[$i]['role'] === 'user') {
-                $text = is_string($builtMessages[$i]['content'])
-                    ? $builtMessages[$i]['content']
+    // Grok supports same vision format as OpenAI
+    if ($imageDataUrl) {
+        for ($i = count($msgs) - 1; $i >= 0; $i--) {
+            if ($msgs[$i]['role'] === 'user') {
+                $textContent = is_string($msgs[$i]['content'])
+                    ? $msgs[$i]['content']
                     : '';
-                $builtMessages[$i]['content'] = [
-                    ['type' => 'text',      'text'      => $text],
-                    ['type' => 'image_url', 'image_url' => [
-                        'url'    => 'data:image/jpeg;base64,' . $image,
-                        'detail' => 'low',
-                    ]],
+                $msgs[$i]['content'] = [
+                    ['type' => 'text',      'text' => $textContent],
+                    ['type' => 'image_url', 'image_url' => ['url' => $imageDataUrl]],
                 ];
                 break;
             }
@@ -175,8 +177,9 @@ function callGrok(string $prompt, array $messages, ?string $image): string {
     $payload = json_encode([
         'model'      => GROK_MODEL,
         'max_tokens' => 300,
-        'messages'   => $builtMessages,
+        'messages'   => $msgs,
     ]);
+
     [$raw, $status] = curlPost(
         'https://api.x.ai/v1/chat/completions',
         $payload,
@@ -187,27 +190,27 @@ function callGrok(string $prompt, array $messages, ?string $image): string {
     return parseAndWrap($raw, $content);
 }
 
-function callGemini(string $prompt, array $messages, ?string $image): string {
-    $key      = GEMINI_API_KEY;
+function callGemini(string $prompt, array $messages, ?string $imageBase64): string {
+    $key = GEMINI_API_KEY;
 
-    $contents = [];
-    $lastIdx  = count($messages) - 1;
+    $contents = array_map(fn($m) => [
+        'role'  => $m['role'] === 'assistant' ? 'model' : 'user',
+        'parts' => [['text' => $m['content']]],
+    ], $messages);
 
-    foreach ($messages as $idx => $m) {
-        $role  = $m['role'] === 'assistant' ? 'model' : 'user';
-        $parts = [['text' => $m['content']]];
-
-        // Attach image to the last user turn
-        if ($image && $idx === $lastIdx && $m['role'] === 'user') {
-            $parts[] = [
-                'inline_data' => [
-                    'mime_type' => 'image/jpeg',
-                    'data'      => $image,
-                ],
-            ];
+    // If image present, add inlineData to the last user message parts
+    if ($imageBase64 && !empty($contents)) {
+        for ($i = count($contents) - 1; $i >= 0; $i--) {
+            if ($contents[$i]['role'] === 'user') {
+                $contents[$i]['parts'][] = [
+                    'inlineData' => [
+                        'mimeType' => 'image/jpeg',
+                        'data'     => $imageBase64,
+                    ],
+                ];
+                break;
+            }
         }
-
-        $contents[] = ['role' => $role, 'parts' => $parts];
     }
 
     $payload = json_encode([
