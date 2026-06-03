@@ -1,17 +1,17 @@
 // ── State ─────────────────────────────────────────────────
-const history   = [];
-let recognition = null;
-let isListening = false;
-let isSpeaking  = false;
-let alwaysOn    = false;
-let currentLang = 'en';
-let fillerBlobs = [];
+const history = [];
+let recognition  = null;
+let isListening  = false;
+let isSpeaking   = false;
+let alwaysOn     = false;
+let currentLang  = 'en';
+let fillerBlobs  = [];   // pre-fetched filler sounds
 
 // Vision state
 let visionStream  = null;
-let visionMode    = null; // null | 'camera' | 'screen'
+let visionMode    = null;  // null | 'camera' | 'screen'
 
-// ── Settings (persisted) ──────────────────────────────────
+// ── Settings (persisted in localStorage) ─────────────────
 const cfg = {
     provider : localStorage.getItem('tars_provider')  || 'openai',
     humor    : parseInt(localStorage.getItem('tars_humor')    ?? 75),
@@ -19,61 +19,69 @@ const cfg = {
     sarcasm  : parseInt(localStorage.getItem('tars_sarcasm')  ?? 40),
 };
 
-// ── DOM ───────────────────────────────────────────────────
+// ── DOM refs ──────────────────────────────────────────────
 const btn          = document.getElementById('talkBtn');
 const statusEl     = document.getElementById('status');
-const transcriptEl = document.getElementById('transcript');
+const transcript   = document.getElementById('transcript');
 const responseEl   = document.getElementById('response');
 const visualizer   = document.getElementById('visualizer');
 const robot        = document.getElementById('tarsRobot');
-const robotStateEl = document.getElementById('robotState');
-const alwaysOnBtn  = document.getElementById('alwaysOnBtn');
+const robotState   = document.getElementById('robotState');
 const chipProvider = document.getElementById('chipProvider');
 const chipHumor    = document.getElementById('chipHumor');
 const chipHumanity = document.getElementById('chipHumanity');
-const visionVideo  = document.getElementById('visionVideo');
-const visionPreview= document.getElementById('visionPreview');
-const visionLabel  = document.getElementById('visionLabel');
-const captureCanvas= document.getElementById('captureCanvas');
+const alwaysOnBtn  = document.getElementById('alwaysOnBtn');
 const cameraBtn    = document.getElementById('cameraBtn');
 const screenBtn    = document.getElementById('screenBtn');
+const visionPreview= document.getElementById('visionPreview');
+const visionVideo  = document.getElementById('visionVideo');
+const visionLabel  = document.getElementById('visionLabel');
+const captureCanvas= document.getElementById('captureCanvas');
 
-// ── Settings UI ───────────────────────────────────────────
+// ── Apply saved settings to UI ────────────────────────────
 function applySettingsToUI() {
     chipProvider.textContent  = cfg.provider.charAt(0).toUpperCase() + cfg.provider.slice(1);
     chipHumor.textContent     = `Humor ${cfg.humor}%`;
     chipHumanity.textContent  = `Humanity ${cfg.humanity}%`;
+
     document.getElementById('sliderHumor').value    = cfg.humor;
     document.getElementById('sliderHumanity').value = cfg.humanity;
     document.getElementById('sliderSarcasm').value  = cfg.sarcasm;
     document.getElementById('valHumor').textContent    = cfg.humor + '%';
     document.getElementById('valHumanity').textContent = cfg.humanity + '%';
     document.getElementById('valSarcasm').textContent  = cfg.sarcasm + '%';
-    document.querySelectorAll('.ptab').forEach(t =>
-        t.classList.toggle('active', t.dataset.p === cfg.provider)
-    );
+
+    document.querySelectorAll('.ptab').forEach(t => {
+        t.classList.toggle('active', t.dataset.p === cfg.provider);
+    });
 }
 
-window.openSettings = () => {
+// ══════════════════════════════════════
+// SETTINGS PANEL
+// ══════════════════════════════════════
+window.openSettings = function () {
     document.getElementById('settingsPanel').classList.add('open');
     document.getElementById('settingsOverlay').classList.remove('hidden');
 };
-window.closeSettings = () => {
+window.closeSettings = function () {
     document.getElementById('settingsPanel').classList.remove('open');
     document.getElementById('settingsOverlay').classList.add('hidden');
 };
-window.saveSettings = () => {
+window.saveSettings = function () {
     cfg.humor     = parseInt(document.getElementById('sliderHumor').value);
     cfg.humanity  = parseInt(document.getElementById('sliderHumanity').value);
     cfg.sarcasm   = parseInt(document.getElementById('sliderSarcasm').value);
+
     localStorage.setItem('tars_provider', cfg.provider);
     localStorage.setItem('tars_humor',    cfg.humor);
     localStorage.setItem('tars_humanity', cfg.humanity);
     localStorage.setItem('tars_sarcasm',  cfg.sarcasm);
+
     applySettingsToUI();
     closeSettings();
 };
 
+// Provider tabs
 document.querySelectorAll('.ptab').forEach(tab => {
     tab.addEventListener('click', () => {
         document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active'));
@@ -82,93 +90,83 @@ document.querySelectorAll('.ptab').forEach(tab => {
     });
 });
 
+// Slider live labels
 ['Humor','Humanity','Sarcasm'].forEach(name => {
-    const s = document.getElementById('slider' + name);
-    const l = document.getElementById('val' + name);
-    s.addEventListener('input', () => { l.textContent = s.value + '%'; });
+    const slider = document.getElementById('slider' + name);
+    const label  = document.getElementById('val' + name);
+    slider.addEventListener('input', () => { label.textContent = slider.value + '%'; });
 });
-
-// ══════════════════════════════════════
-// VISION — Camera & Screen Share
-// ══════════════════════════════════════
-window.toggleCamera = async () => {
-    if (visionMode === 'camera') { stopVision(); return; }
-    stopVision();
-    try {
-        visionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        visionVideo.srcObject = visionStream;
-        visionLabel.textContent = 'CAM';
-        visionPreview.classList.remove('hidden');
-        visionMode = 'camera';
-        cameraBtn.classList.add('active');
-        screenBtn.classList.remove('active');
-    } catch (e) {
-        alert('Camera access denied.');
-    }
-};
-
-window.toggleScreen = async () => {
-    if (visionMode === 'screen') { stopVision(); return; }
-    stopVision();
-    try {
-        visionStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        visionVideo.srcObject = visionStream;
-        visionLabel.textContent = 'SCR';
-        visionPreview.classList.remove('hidden');
-        visionMode = 'screen';
-        screenBtn.classList.add('active');
-        cameraBtn.classList.remove('active');
-        visionStream.getVideoTracks()[0].onended = () => stopVision();
-    } catch (e) {
-        // user cancelled
-    }
-};
-
-function stopVision() {
-    if (visionStream) {
-        visionStream.getTracks().forEach(t => t.stop());
-        visionStream = null;
-    }
-    visionMode = null;
-    visionPreview.classList.add('hidden');
-    cameraBtn.classList.remove('active');
-    screenBtn.classList.remove('active');
-}
-
-document.getElementById('visionClose').onclick = stopVision;
-
-function captureFrame() {
-    if (!visionMode || !visionVideo.videoWidth) return null;
-    const ctx = captureCanvas.getContext('2d');
-    captureCanvas.width  = 320;
-    captureCanvas.height = 240;
-    ctx.drawImage(visionVideo, 0, 0, 320, 240);
-    // Return raw base64 (PHP adds the data URL prefix)
-    const dataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
-    return dataUrl.split(',')[1];
-}
 
 // ══════════════════════════════════════
 // ALWAYS ON
 // ══════════════════════════════════════
-window.toggleAlwaysOn = () => {
+window.toggleAlwaysOn = function () {
     alwaysOn = !alwaysOn;
     alwaysOnBtn.classList.toggle('active', alwaysOn);
-    if (alwaysOn) {
+    if (alwaysOn && !isListening && !isSpeaking) {
         startListening();
-    } else {
-        try { recognition && recognition.abort(); } catch {}
-        isListening = false;
-        setStatus('ready');
     }
 };
 
-function restartIfAlwaysOn() {
-    if (alwaysOn && !isSpeaking) {
-        setTimeout(startListening, 900);
-    } else if (!alwaysOn) {
-        setStatus('ready');
+// ══════════════════════════════════════
+// VISION — Camera & Screen Share
+// ══════════════════════════════════════
+window.toggleCamera = function () {
+    if (visionMode === 'camera') { stopVision(); return; }
+    startVision('camera');
+};
+
+window.toggleScreen = function () {
+    if (visionMode === 'screen') { stopVision(); return; }
+    startVision('screen');
+};
+
+async function startVision(mode) {
+    stopVision(false); // stop existing without UI cleanup yet
+    try {
+        let stream;
+        if (mode === 'camera') {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } else {
+            stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        }
+        visionStream = stream;
+        visionMode   = mode;
+        visionVideo.srcObject = stream;
+        visionPreview.classList.remove('hidden');
+        visionLabel.textContent = mode === 'camera' ? 'CAM' : 'SCR';
+        cameraBtn.classList.toggle('active', mode === 'camera');
+        screenBtn.classList.toggle('active', mode === 'screen');
+
+        // Auto-stop when user ends screen share via browser UI
+        stream.getVideoTracks()[0].onended = () => stopVision();
+    } catch (err) {
+        console.warn('Vision error:', err);
+        stopVision();
     }
+}
+
+window.stopVision = function (updateUI = true) {
+    if (visionStream) {
+        visionStream.getTracks().forEach(t => t.stop());
+        visionStream = null;
+    }
+    visionVideo.srcObject = null;
+    visionMode = null;
+    if (updateUI) {
+        visionPreview.classList.add('hidden');
+        cameraBtn.classList.remove('active');
+        screenBtn.classList.remove('active');
+    }
+};
+
+function captureFrame() {
+    if (!visionStream || !visionVideo.videoWidth) return null;
+    const ctx = captureCanvas.getContext('2d');
+    captureCanvas.width  = 320;
+    captureCanvas.height = 240;
+    ctx.drawImage(visionVideo, 0, 0, 320, 240);
+    return captureCanvas.toDataURL('image/jpeg', 0.8);
 }
 
 // ══════════════════════════════════════
@@ -177,7 +175,7 @@ function restartIfAlwaysOn() {
 function setupRecognition() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-        statusEl.textContent = 'Use Chrome (Android) or Safari (iOS).';
+        statusEl.textContent = 'Use Chrome (Android) or Safari (iOS) for voice.';
         btn.disabled = true;
         return false;
     }
@@ -187,20 +185,23 @@ function setupRecognition() {
 
     recognition.onresult = async (e) => {
         const text = e.results[0][0].transcript.trim();
-        if (!text) { restartIfAlwaysOn(); return; }
+        if (!text) { if (!isSpeaking) setStatus('ready'); return; }
         showUserText(text);
         await sendToTARS(text);
     };
 
-    recognition.onerror = (e) => {
-        isListening = false;
-        if (e.error === 'no-speech') restartIfAlwaysOn();
-        else setStatus(alwaysOn ? 'listening' : 'ready');
+    recognition.onerror = (err) => {
+        // 'aborted' is intentional (we abort before TTS) — don't treat as error
+        if (err.error !== 'aborted') {
+            isListening = false;
+            if (!isSpeaking) setStatus('ready');
+        }
     };
 
     recognition.onend = () => {
         isListening = false;
-        if (!isSpeaking) restartIfAlwaysOn();
+        // If Always On and not speaking, restart after TTS finishes (handled in speakTARS)
+        if (!isSpeaking && !alwaysOn) setStatus('ready');
     };
 
     return true;
@@ -224,13 +225,17 @@ function startListening() {
 // ══════════════════════════════════════
 async function prefetchFillers() {
     try {
-        const fetches = [fetch('api/filler.php'), fetch('api/filler.php'), fetch('api/filler.php')];
-        const results = await Promise.allSettled(fetches);
+        const results = await Promise.allSettled([
+            fetch('api/filler.php'),
+            fetch('api/filler.php'),
+            fetch('api/filler.php'),
+        ]);
         for (const r of results) {
             if (r.status === 'fulfilled' && r.value.ok) {
                 const ct = r.value.headers.get('content-type') || '';
                 if (ct.includes('audio')) {
-                    fillerBlobs.push(URL.createObjectURL(await r.value.blob()));
+                    const blob = await r.value.blob();
+                    fillerBlobs.push(URL.createObjectURL(blob));
                 }
             }
         }
@@ -251,7 +256,7 @@ async function playFiller() {
 }
 
 // ══════════════════════════════════════
-// UI HELPERS
+// UI
 // ══════════════════════════════════════
 const ROBOT_LABELS = {
     ready    : 'STANDBY',
@@ -263,12 +268,12 @@ const ROBOT_LABELS = {
 
 function setRobotState(state) {
     robot.className        = (state === 'ready' || state === 'filler') ? '' : state;
-    robotStateEl.textContent = ROBOT_LABELS[state] || 'STANDBY';
+    robotState.textContent = ROBOT_LABELS[state] || 'STANDBY';
 }
 
 function setStatus(state) {
     const map = {
-        ready    : { text: 'Ready',                 cls: 'ready'     },
+        ready    : { text: 'Press to speak',        cls: 'ready'     },
         listening: { text: 'Listening...',           cls: 'listening' },
         thinking : { text: 'Processing...',          cls: 'thinking'  },
         speaking : { text: 'TARS is responding...', cls: 'speaking'  },
@@ -280,14 +285,8 @@ function setStatus(state) {
     setRobotState(state);
 }
 
-function showUserText(text) {
-    transcriptEl.textContent = text;
-    transcriptEl.style.opacity = '1';
-}
-function showTARSText(text) {
-    responseEl.textContent = text;
-    responseEl.style.opacity = '1';
-}
+function showUserText(text) { transcript.textContent = text; transcript.style.opacity = '1'; }
+function showTARSText(text) { responseEl.textContent = text; responseEl.style.opacity = '1'; }
 
 // ══════════════════════════════════════
 // SMART HOME COMMANDS
@@ -332,21 +331,23 @@ async function sendToTARS(userText) {
     history.push({ role: 'user', content: userText });
 
     // Capture vision frame if active
-    const image = captureFrame();
+    const imageDataUrl = captureFrame();
 
     try {
+        const payload = {
+            messages: history,
+            provider: cfg.provider,
+            lang    : currentLang,
+            humor   : cfg.humor,
+            humanity: cfg.humanity,
+            sarcasm : cfg.sarcasm,
+        };
+        if (imageDataUrl) payload.image = imageDataUrl;
+
         const res  = await fetch('api/chat.php', {
             method : 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body   : JSON.stringify({
-                messages: history,
-                provider: cfg.provider,
-                lang    : currentLang,
-                humor   : cfg.humor,
-                humanity: cfg.humanity,
-                sarcasm : cfg.sarcasm,
-                image   : image,
-            }),
+            body   : JSON.stringify(payload),
         });
         const data  = await res.json();
         const reply = data.choices[0].message.content;
@@ -357,25 +358,26 @@ async function sendToTARS(userText) {
 
         showTARSText(reply);
         await speakTARS(reply);
-    } catch {
+    } catch (e) {
         responseEl.textContent = 'Connection error.';
         isSpeaking = false;
-        restartIfAlwaysOn();
+        setStatus('ready');
+        if (alwaysOn) setTimeout(startListening, 900);
     }
 }
 
 // ══════════════════════════════════════
-// TTS — stop mic first, restart after
+// TTS
 // ══════════════════════════════════════
 async function speakTARS(text) {
-    // Abort mic immediately so TARS doesn't hear himself
-    if (isListening) {
+    setStatus('speaking');
+    isSpeaking = true;
+
+    // Stop recognition immediately so TARS doesn't hear himself
+    if (recognition && isListening) {
         try { recognition.abort(); } catch {}
         isListening = false;
     }
-
-    setStatus('speaking');
-    isSpeaking = true;
 
     try {
         const res = await fetch('api/tts.php', {
@@ -384,34 +386,41 @@ async function speakTARS(text) {
             body   : JSON.stringify({ text }),
         });
 
-        if (!res.ok || !(res.headers.get('content-type') || '').includes('audio')) {
-            await browserSpeak(text);
-        } else {
-            const blob  = await res.blob();
-            const url   = URL.createObjectURL(blob);
-            const audio = new Audio(url);
-            await new Promise(resolve => {
-                audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-                audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
-                audio.play().catch(resolve);
-            });
+        if (!res.ok) { await browserSpeak(text); }
+        else {
+            const ct = res.headers.get('content-type') || '';
+            if (!ct.includes('audio')) { await browserSpeak(text); }
+            else {
+                const blob  = await res.blob();
+                const url   = URL.createObjectURL(blob);
+                const audio = new Audio(url);
+                await new Promise(resolve => {
+                    audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+                    audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+                    audio.play().catch(resolve);
+                });
+            }
         }
     } catch {
         await browserSpeak(text);
     }
 
     isSpeaking = false;
-    // Wait 900ms after audio ends before restarting mic (prevents echo pickup)
-    restartIfAlwaysOn();
-    if (!alwaysOn) setStatus('ready');
+    setStatus('ready');
+
+    // Always On: wait 900ms then restart listening
+    if (alwaysOn) {
+        setTimeout(startListening, 900);
+    }
 }
 
 function browserSpeak(text) {
     return new Promise(resolve => {
         if (!window.speechSynthesis) { resolve(); return; }
-        const utt  = new SpeechSynthesisUtterance(text);
-        utt.rate   = 0.88;
-        utt.pitch  = 0.75;
+        const utt   = new SpeechSynthesisUtterance(text);
+        utt.rate    = 0.88;
+        utt.pitch   = 0.75;
+        utt.volume  = 1;
         const voices = speechSynthesis.getVoices();
         const deep   = voices.find(v => /male|guy|daniel|google uk/i.test(v.name));
         if (deep) utt.voice = deep;
@@ -422,30 +431,24 @@ function browserSpeak(text) {
 }
 
 // ══════════════════════════════════════
-// SPEAK BUTTON
+// BUTTON — handles both click and touch
 // ══════════════════════════════════════
 let touchHandled = false;
 
-window.handleTouch = (e) => {
+window.handleTouch = function (e) {
     e.preventDefault();
     touchHandled = true;
     onActivate();
     setTimeout(() => { touchHandled = false; }, 300);
 };
 
-window.handleClick = () => {
+window.handleClick = function () {
     if (touchHandled) return;
     onActivate();
 };
 
 async function onActivate() {
-    if (isSpeaking) return;
-    if (isListening) {
-        try { recognition.abort(); } catch {}
-        isListening = false;
-        setStatus('ready');
-        return;
-    }
+    if (isListening || isSpeaking) return;
     await playFiller();
     startListening();
 }
