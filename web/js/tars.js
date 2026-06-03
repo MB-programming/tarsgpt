@@ -1,12 +1,17 @@
 // ── State ─────────────────────────────────────────────────
-const history = [];
+const history   = [];
 let recognition = null;
 let isListening = false;
 let isSpeaking  = false;
+let alwaysOn    = false;
 let currentLang = 'en';
-let fillerBlobs = [];   // pre-fetched filler sounds
+let fillerBlobs = [];
 
-// ── Settings (persisted in localStorage) ─────────────────
+// Vision state
+let visionStream  = null;
+let visionMode    = null; // null | 'camera' | 'screen'
+
+// ── Settings (persisted) ──────────────────────────────────
 const cfg = {
     provider : localStorage.getItem('tars_provider')  || 'openai',
     humor    : parseInt(localStorage.getItem('tars_humor')    ?? 75),
@@ -14,62 +19,61 @@ const cfg = {
     sarcasm  : parseInt(localStorage.getItem('tars_sarcasm')  ?? 40),
 };
 
-// ── DOM refs ──────────────────────────────────────────────
-const btn         = document.getElementById('talkBtn');
-const statusEl    = document.getElementById('status');
-const transcript  = document.getElementById('transcript');
-const responseEl  = document.getElementById('response');
-const visualizer  = document.getElementById('visualizer');
-const robot       = document.getElementById('tarsRobot');
-const robotState  = document.getElementById('robotState');
-const chipProvider= document.getElementById('chipProvider');
-const chipHumor   = document.getElementById('chipHumor');
-const chipHumanity= document.getElementById('chipHumanity');
+// ── DOM ───────────────────────────────────────────────────
+const btn          = document.getElementById('talkBtn');
+const statusEl     = document.getElementById('status');
+const transcriptEl = document.getElementById('transcript');
+const responseEl   = document.getElementById('response');
+const visualizer   = document.getElementById('visualizer');
+const robot        = document.getElementById('tarsRobot');
+const robotStateEl = document.getElementById('robotState');
+const alwaysOnBtn  = document.getElementById('alwaysOnBtn');
+const chipProvider = document.getElementById('chipProvider');
+const chipHumor    = document.getElementById('chipHumor');
+const chipHumanity = document.getElementById('chipHumanity');
+const visionVideo  = document.getElementById('visionVideo');
+const visionPreview= document.getElementById('visionPreview');
+const visionLabel  = document.getElementById('visionLabel');
+const captureCanvas= document.getElementById('captureCanvas');
+const cameraBtn    = document.getElementById('cameraBtn');
+const screenBtn    = document.getElementById('screenBtn');
 
-// ── Apply saved settings to UI ────────────────────────────
+// ── Settings UI ───────────────────────────────────────────
 function applySettingsToUI() {
     chipProvider.textContent  = cfg.provider.charAt(0).toUpperCase() + cfg.provider.slice(1);
     chipHumor.textContent     = `Humor ${cfg.humor}%`;
     chipHumanity.textContent  = `Humanity ${cfg.humanity}%`;
-
     document.getElementById('sliderHumor').value    = cfg.humor;
     document.getElementById('sliderHumanity').value = cfg.humanity;
     document.getElementById('sliderSarcasm').value  = cfg.sarcasm;
     document.getElementById('valHumor').textContent    = cfg.humor + '%';
     document.getElementById('valHumanity').textContent = cfg.humanity + '%';
     document.getElementById('valSarcasm').textContent  = cfg.sarcasm + '%';
-
-    document.querySelectorAll('.ptab').forEach(t => {
-        t.classList.toggle('active', t.dataset.p === cfg.provider);
-    });
+    document.querySelectorAll('.ptab').forEach(t =>
+        t.classList.toggle('active', t.dataset.p === cfg.provider)
+    );
 }
 
-// ══════════════════════════════════════
-// SETTINGS PANEL
-// ══════════════════════════════════════
-window.openSettings = function () {
+window.openSettings = () => {
     document.getElementById('settingsPanel').classList.add('open');
     document.getElementById('settingsOverlay').classList.remove('hidden');
 };
-window.closeSettings = function () {
+window.closeSettings = () => {
     document.getElementById('settingsPanel').classList.remove('open');
     document.getElementById('settingsOverlay').classList.add('hidden');
 };
-window.saveSettings = function () {
+window.saveSettings = () => {
     cfg.humor     = parseInt(document.getElementById('sliderHumor').value);
     cfg.humanity  = parseInt(document.getElementById('sliderHumanity').value);
     cfg.sarcasm   = parseInt(document.getElementById('sliderSarcasm').value);
-
     localStorage.setItem('tars_provider', cfg.provider);
     localStorage.setItem('tars_humor',    cfg.humor);
     localStorage.setItem('tars_humanity', cfg.humanity);
     localStorage.setItem('tars_sarcasm',  cfg.sarcasm);
-
     applySettingsToUI();
     closeSettings();
 };
 
-// Provider tabs
 document.querySelectorAll('.ptab').forEach(tab => {
     tab.addEventListener('click', () => {
         document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active'));
@@ -78,12 +82,94 @@ document.querySelectorAll('.ptab').forEach(tab => {
     });
 });
 
-// Slider live labels
 ['Humor','Humanity','Sarcasm'].forEach(name => {
-    const slider = document.getElementById('slider' + name);
-    const label  = document.getElementById('val' + name);
-    slider.addEventListener('input', () => { label.textContent = slider.value + '%'; });
+    const s = document.getElementById('slider' + name);
+    const l = document.getElementById('val' + name);
+    s.addEventListener('input', () => { l.textContent = s.value + '%'; });
 });
+
+// ══════════════════════════════════════
+// VISION — Camera & Screen Share
+// ══════════════════════════════════════
+window.toggleCamera = async () => {
+    if (visionMode === 'camera') { stopVision(); return; }
+    stopVision();
+    try {
+        visionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        visionVideo.srcObject = visionStream;
+        visionLabel.textContent = 'CAM';
+        visionPreview.classList.remove('hidden');
+        visionMode = 'camera';
+        cameraBtn.classList.add('active');
+        screenBtn.classList.remove('active');
+    } catch (e) {
+        alert('Camera access denied.');
+    }
+};
+
+window.toggleScreen = async () => {
+    if (visionMode === 'screen') { stopVision(); return; }
+    stopVision();
+    try {
+        visionStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        visionVideo.srcObject = visionStream;
+        visionLabel.textContent = 'SCR';
+        visionPreview.classList.remove('hidden');
+        visionMode = 'screen';
+        screenBtn.classList.add('active');
+        cameraBtn.classList.remove('active');
+        visionStream.getVideoTracks()[0].onended = () => stopVision();
+    } catch (e) {
+        // user cancelled
+    }
+};
+
+function stopVision() {
+    if (visionStream) {
+        visionStream.getTracks().forEach(t => t.stop());
+        visionStream = null;
+    }
+    visionMode = null;
+    visionPreview.classList.add('hidden');
+    cameraBtn.classList.remove('active');
+    screenBtn.classList.remove('active');
+}
+
+document.getElementById('visionClose').onclick = stopVision;
+
+function captureFrame() {
+    if (!visionMode || !visionVideo.videoWidth) return null;
+    const ctx = captureCanvas.getContext('2d');
+    captureCanvas.width  = 320;
+    captureCanvas.height = 240;
+    ctx.drawImage(visionVideo, 0, 0, 320, 240);
+    // Return raw base64 (PHP adds the data URL prefix)
+    const dataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
+    return dataUrl.split(',')[1];
+}
+
+// ══════════════════════════════════════
+// ALWAYS ON
+// ══════════════════════════════════════
+window.toggleAlwaysOn = () => {
+    alwaysOn = !alwaysOn;
+    alwaysOnBtn.classList.toggle('active', alwaysOn);
+    if (alwaysOn) {
+        startListening();
+    } else {
+        try { recognition && recognition.abort(); } catch {}
+        isListening = false;
+        setStatus('ready');
+    }
+};
+
+function restartIfAlwaysOn() {
+    if (alwaysOn && !isSpeaking) {
+        setTimeout(startListening, 900);
+    } else if (!alwaysOn) {
+        setStatus('ready');
+    }
+}
 
 // ══════════════════════════════════════
 // SPEECH RECOGNITION
@@ -91,7 +177,7 @@ document.querySelectorAll('.ptab').forEach(tab => {
 function setupRecognition() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-        statusEl.textContent = 'Use Chrome (Android) or Safari (iOS) for voice.';
+        statusEl.textContent = 'Use Chrome (Android) or Safari (iOS).';
         btn.disabled = true;
         return false;
     }
@@ -101,19 +187,20 @@ function setupRecognition() {
 
     recognition.onresult = async (e) => {
         const text = e.results[0][0].transcript.trim();
-        if (!text) { setStatus('ready'); return; }
+        if (!text) { restartIfAlwaysOn(); return; }
         showUserText(text);
         await sendToTARS(text);
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (e) => {
         isListening = false;
-        setStatus('ready');
+        if (e.error === 'no-speech') restartIfAlwaysOn();
+        else setStatus(alwaysOn ? 'listening' : 'ready');
     };
 
     recognition.onend = () => {
         isListening = false;
-        if (!isSpeaking) setStatus('ready');
+        if (!isSpeaking) restartIfAlwaysOn();
     };
 
     return true;
@@ -137,17 +224,13 @@ function startListening() {
 // ══════════════════════════════════════
 async function prefetchFillers() {
     try {
-        const results = await Promise.allSettled([
-            fetch('api/filler.php'),
-            fetch('api/filler.php'),
-            fetch('api/filler.php'),
-        ]);
+        const fetches = [fetch('api/filler.php'), fetch('api/filler.php'), fetch('api/filler.php')];
+        const results = await Promise.allSettled(fetches);
         for (const r of results) {
             if (r.status === 'fulfilled' && r.value.ok) {
                 const ct = r.value.headers.get('content-type') || '';
                 if (ct.includes('audio')) {
-                    const blob = await r.value.blob();
-                    fillerBlobs.push(URL.createObjectURL(blob));
+                    fillerBlobs.push(URL.createObjectURL(await r.value.blob()));
                 }
             }
         }
@@ -168,7 +251,7 @@ async function playFiller() {
 }
 
 // ══════════════════════════════════════
-// UI
+// UI HELPERS
 // ══════════════════════════════════════
 const ROBOT_LABELS = {
     ready    : 'STANDBY',
@@ -179,13 +262,13 @@ const ROBOT_LABELS = {
 };
 
 function setRobotState(state) {
-    robot.className       = (state === 'ready' || state === 'filler') ? '' : state;
-    robotState.textContent = ROBOT_LABELS[state] || 'STANDBY';
+    robot.className        = (state === 'ready' || state === 'filler') ? '' : state;
+    robotStateEl.textContent = ROBOT_LABELS[state] || 'STANDBY';
 }
 
 function setStatus(state) {
     const map = {
-        ready    : { text: 'Press to speak',        cls: 'ready'     },
+        ready    : { text: 'Ready',                 cls: 'ready'     },
         listening: { text: 'Listening...',           cls: 'listening' },
         thinking : { text: 'Processing...',          cls: 'thinking'  },
         speaking : { text: 'TARS is responding...', cls: 'speaking'  },
@@ -197,8 +280,14 @@ function setStatus(state) {
     setRobotState(state);
 }
 
-function showUserText(text) { transcript.textContent = text; transcript.style.opacity = '1'; }
-function showTARSText(text) { responseEl.textContent = text; responseEl.style.opacity = '1'; }
+function showUserText(text) {
+    transcriptEl.textContent = text;
+    transcriptEl.style.opacity = '1';
+}
+function showTARSText(text) {
+    responseEl.textContent = text;
+    responseEl.style.opacity = '1';
+}
 
 // ══════════════════════════════════════
 // SMART HOME COMMANDS
@@ -215,8 +304,6 @@ function executeCommand(cmd) {
         const on = cmd.value === 'on';
         document.body.style.setProperty('--bg',    on ? '#0d1a2e' : '#050810');
         document.body.style.setProperty('--panel', on ? '#112240' : '#0a0f1e');
-        document.querySelector('.panel').style.boxShadow =
-            on ? '0 0 60px rgba(0,212,255,0.12)' : 'none';
     }
     if (cmd.cmd === 'color') {
         const name  = (cmd.value || 'random').toLowerCase();
@@ -244,6 +331,9 @@ async function sendToTARS(userText) {
     detectLangSwitch(userText);
     history.push({ role: 'user', content: userText });
 
+    // Capture vision frame if active
+    const image = captureFrame();
+
     try {
         const res  = await fetch('api/chat.php', {
             method : 'POST',
@@ -255,6 +345,7 @@ async function sendToTARS(userText) {
                 humor   : cfg.humor,
                 humanity: cfg.humanity,
                 sarcasm : cfg.sarcasm,
+                image   : image,
             }),
         });
         const data  = await res.json();
@@ -266,17 +357,23 @@ async function sendToTARS(userText) {
 
         showTARSText(reply);
         await speakTARS(reply);
-    } catch (e) {
+    } catch {
         responseEl.textContent = 'Connection error.';
         isSpeaking = false;
-        setStatus('ready');
+        restartIfAlwaysOn();
     }
 }
 
 // ══════════════════════════════════════
-// TTS
+// TTS — stop mic first, restart after
 // ══════════════════════════════════════
 async function speakTARS(text) {
+    // Abort mic immediately so TARS doesn't hear himself
+    if (isListening) {
+        try { recognition.abort(); } catch {}
+        isListening = false;
+    }
+
     setStatus('speaking');
     isSpeaking = true;
 
@@ -287,37 +384,34 @@ async function speakTARS(text) {
             body   : JSON.stringify({ text }),
         });
 
-        // If TTS API unavailable, fallback to browser SpeechSynthesis
-        if (!res.ok) { await browserSpeak(text); return; }
-
-        const ct = res.headers.get('content-type') || '';
-        if (!ct.includes('audio')) { await browserSpeak(text); return; }
-
-        const blob  = await res.blob();
-        const url   = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-
-        await new Promise(resolve => {
-            audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-            audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
-            audio.play().catch(resolve);
-        });
+        if (!res.ok || !(res.headers.get('content-type') || '').includes('audio')) {
+            await browserSpeak(text);
+        } else {
+            const blob  = await res.blob();
+            const url   = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            await new Promise(resolve => {
+                audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+                audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+                audio.play().catch(resolve);
+            });
+        }
     } catch {
         await browserSpeak(text);
     }
 
     isSpeaking = false;
-    setStatus('ready');
+    // Wait 900ms after audio ends before restarting mic (prevents echo pickup)
+    restartIfAlwaysOn();
+    if (!alwaysOn) setStatus('ready');
 }
 
 function browserSpeak(text) {
     return new Promise(resolve => {
         if (!window.speechSynthesis) { resolve(); return; }
-        const utt   = new SpeechSynthesisUtterance(text);
-        utt.rate    = 0.88;
-        utt.pitch   = 0.75;
-        utt.volume  = 1;
-        // Pick deepest available voice
+        const utt  = new SpeechSynthesisUtterance(text);
+        utt.rate   = 0.88;
+        utt.pitch  = 0.75;
         const voices = speechSynthesis.getVoices();
         const deep   = voices.find(v => /male|guy|daniel|google uk/i.test(v.name));
         if (deep) utt.voice = deep;
@@ -328,24 +422,30 @@ function browserSpeak(text) {
 }
 
 // ══════════════════════════════════════
-// BUTTON — handles both click and touch
+// SPEAK BUTTON
 // ══════════════════════════════════════
 let touchHandled = false;
 
-window.handleTouch = function (e) {
+window.handleTouch = (e) => {
     e.preventDefault();
     touchHandled = true;
     onActivate();
     setTimeout(() => { touchHandled = false; }, 300);
 };
 
-window.handleClick = function () {
+window.handleClick = () => {
     if (touchHandled) return;
     onActivate();
 };
 
 async function onActivate() {
-    if (isListening || isSpeaking) return;
+    if (isSpeaking) return;
+    if (isListening) {
+        try { recognition.abort(); } catch {}
+        isListening = false;
+        setStatus('ready');
+        return;
+    }
     await playFiller();
     startListening();
 }

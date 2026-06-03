@@ -50,10 +50,32 @@
     <button class="save-btn" onclick="saveSettings()">APPLY</button>
 </div>
 
+<!-- ── Vision preview overlay ─────────────────────── -->
+<div id="visionPreview" class="vision-preview hidden">
+    <video id="visionVideo" autoplay muted playsinline></video>
+    <div class="vision-label" id="visionLabel">CAM</div>
+    <button class="vision-close" id="visionClose" onclick="stopVision()">✕</button>
+</div>
+<canvas id="captureCanvas" width="320" height="240" style="display:none;"></canvas>
+
 <!-- ── Main ───────────────────────────────────────── -->
 <div class="page-wrap">
 
-    <!-- TARS robot -->
+    <!-- Header -->
+    <header class="site-header">
+        <div class="header-top">
+            <div class="tars-logo">TARS</div>
+            <button class="gear-btn" onclick="openSettings()">⚙</button>
+        </div>
+        <div class="tars-sub">TACTICAL ASSISTANCE ROBOT SYSTEM</div>
+        <div class="settings-chips">
+            <span class="chip" id="chipProvider">OpenAI</span>
+            <span class="chip" id="chipHumor">Humor 75%</span>
+            <span class="chip" id="chipHumanity">Humanity 50%</span>
+        </div>
+    </header>
+
+    <!-- TARS Robot -->
     <div class="tars-robot-wrap">
         <div class="tars-robot" id="tarsRobot">
             <div class="tars-body">
@@ -67,7 +89,10 @@
                 </div>
                 <div class="tars-panel p2">
                     <div class="panel-inner">
-                        <div class="eye-strip"><div class="eye"></div><div class="eye-glow"></div></div>
+                        <div class="eye-strip">
+                            <div class="eye" id="tarsEye"></div>
+                            <div class="eye-glow"></div>
+                        </div>
                         <div class="panel-line"></div>
                         <div class="corner-light tl"></div><div class="corner-light tr"></div>
                         <div class="corner-light bl"></div><div class="corner-light br"></div>
@@ -93,61 +118,64 @@
                     </div>
                 </div>
             </div>
+            <div class="tars-aura"></div>
             <div class="tars-shadow"></div>
         </div>
         <div class="robot-state" id="robotState">STANDBY</div>
     </div>
 
-    <!-- Controls -->
-    <div class="controls-wrap">
-
-        <header>
-            <div class="header-top">
-                <div class="tars-logo">TARS</div>
-                <button class="gear-btn" onclick="openSettings()">⚙</button>
-            </div>
-            <div class="tars-sub">TACTICAL ASSISTANCE ROBOT SYSTEM</div>
-            <div class="settings-chips">
-                <span class="chip" id="chipProvider">OpenAI</span>
-                <span class="chip" id="chipHumor">Humor 75%</span>
-                <span class="chip" id="chipHumanity">Humanity 50%</span>
-            </div>
-        </header>
-
-        <main class="panel">
-
-            <div class="visualizer-wrap">
-                <div id="visualizer">
-                    <div class="bar"></div><div class="bar"></div>
-                    <div class="bar"></div><div class="bar"></div>
-                    <div class="bar"></div><div class="bar"></div>
-                    <div class="bar"></div>
-                </div>
-            </div>
-
-            <div class="btn-wrap">
-                <button id="talkBtn" ontouchstart="handleTouch(event)" onclick="handleClick()">
-                    <span class="btn-label">SPEAK</span>
-                </button>
-            </div>
-
-            <div id="status">Ready</div>
-
-            <div class="conversation">
-                <div>
-                    <div class="msg-label">You</div>
-                    <div class="msg-text" id="transcript"></div>
-                </div>
-                <div>
-                    <div class="msg-label">TARS</div>
-                    <div class="msg-text" id="response"></div>
-                </div>
-            </div>
-
-        </main>
-
-        <footer>INTERSTELLAR SYSTEMS · ENDURANCE MISSION · 2067</footer>
+    <!-- TARS response card -->
+    <div class="response-card glass-card" id="responseCard">
+        <div class="msg-label">TARS</div>
+        <div class="msg-text" id="response">—</div>
     </div>
+
+    <!-- User transcript card -->
+    <div class="transcript-card glass-card" id="transcriptCard">
+        <div class="msg-label">YOU</div>
+        <div class="msg-text" id="transcript"></div>
+    </div>
+
+    <!-- Status -->
+    <div id="status">Ready</div>
+
+    <!-- Bottom input bar -->
+    <div class="input-bar">
+
+        <!-- Left cluster: vision + always-on -->
+        <div class="input-bar-left">
+            <button class="icon-btn" id="cameraBtn" title="Camera vision" onclick="toggleCamera()">
+                <span class="icon-btn-icon">📷</span>
+            </button>
+            <button class="icon-btn" id="screenBtn" title="Screen share vision" onclick="toggleScreen()">
+                <span class="icon-btn-icon">🖥</span>
+            </button>
+            <button class="always-on-btn" id="alwaysOnBtn" onclick="toggleAlwaysOn()" title="Always On — TARS listens continuously">
+                <span class="ao-dot"></span>
+                <span class="ao-label">ON</span>
+            </button>
+        </div>
+
+        <!-- Center: visualizer -->
+        <div class="visualizer-wrap">
+            <div id="visualizer">
+                <div class="bar"></div><div class="bar"></div>
+                <div class="bar"></div><div class="bar"></div>
+                <div class="bar"></div><div class="bar"></div>
+                <div class="bar"></div>
+            </div>
+        </div>
+
+        <!-- Right: SPEAK button -->
+        <div class="input-bar-right">
+            <button id="talkBtn" ontouchstart="handleTouch(event)" onclick="handleClick()">
+                <span class="btn-label">SPEAK</span>
+            </button>
+        </div>
+
+    </div>
+
+    <footer>INTERSTELLAR SYSTEMS · ENDURANCE MISSION · 2067</footer>
 </div>
 
 <script src="js/tars.js"></script>
